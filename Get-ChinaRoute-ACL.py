@@ -98,5 +98,6 @@ class ZoneRoute(object):
 
 if __name__ == '__main__':
     C = ZoneRoute()
+    # 选择区域 默认cn
     # C.zone = 'cn'
     C.save_cisco_cal()
