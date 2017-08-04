@@ -13,4 +13,4 @@ convert_sql_excel	转换SQL结果到excel并邮件发送
 
 copy_file 一个带过滤器的文件复制脚本
 
-windows_log_analysis2 window日志提权格式化为excel
+windows_log_analysis2 window日志提取格式化为excel
