@@ -2,7 +2,7 @@
 #
 # __author__='Sonny Yang'
 #
-export PATH=$PATH:/bin:/sbin:/usr/bin:/usr/sbin:/root/bin:/usr/local/sbin:/usr/local/bin
+PATH=$PATH:/bin:/sbin:/usr/bin:/usr/sbin:/root/bin:/usr/local/sbin:/usr/local/bin
 # ------------自定义参数开始---------------
 folder="/var/log"
 types="*.log"
