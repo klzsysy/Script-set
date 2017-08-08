@@ -43,8 +43,12 @@ mount_disk(){
 
     if [ $1 -gt 0 ] 2>/dev/null;
     then
-         pat="/dev/$(show_ntfs | grep "$1:" | awk '{print $NF}')"
-
+        bit_dev=$(show_ntfs | grep "$1:" | awk '{print $NF}')
+        if [ -z "${bit_dev}" ];then
+            echo "not bitclockrt device" >&2
+            exit -1
+        fi
+        pat="/dev/$(show_ntfs | grep "$1:" | awk '{print $NF}')"
     elif [ ! -b "$disk}" ];then
         echo "the $1 is not block device"
         exit 1
@@ -125,6 +129,7 @@ umount_disk(){
 
     else
         script_help
+	exit 1
     fi
 
     set +e
@@ -173,6 +178,7 @@ elif [ $# -eq 1 ];then
         script_help
     else
         script_help
+	exit 1
     fi
 # 两个或更多参数
 else
