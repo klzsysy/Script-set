@@ -109,6 +109,7 @@ umount_disk(){
         script_help
 
     elif [ "$2" == "all" ];then
+        set +e
         while read d
         do
             diskutil umount "$(echo "${d}" | awk '{print $NF}')"
