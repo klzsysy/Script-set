@@ -12,4 +12,4 @@
 | [oc-to-k8s](python/oc-to-k8s.py)                       | Python   | 将运行于OpenShift中的应用部署到kubernetes中                  |
 | [monitor_folder](shell/monitor_folder.sh)              | Shell    | 轮询文件夹，监控其变化做出自定义动作，如发生改变就执行复制动作 |
 | [osx-mount-bitlocker](shell/osx-mount-bitlocker.sh)    | Shell    | OSX下挂载/卸载 bitlocker加密卷，使用dislocker方案            |
-| [deploy](shell/deploy/deploy.sh)                       | Shell    | 从openshift或k8s获取java微服务应用镜像部署到裸机。完成自动运行、自动更新API路由、自动更新DNS、健康检查、故障恢复等功能。用于临时测试或者临时业务迁移。 |
+| [deploy](shell/deploy/deploy.sh)                       | Shell    | 一个简单的微服务管理工具。从openshift或k8s获取java微服务应用部署到裸机。完成自动运行、自动更新API路由、自动更新DNS、健康检查、自动故障恢复等功能。用于临时测试或者临时业务迁移。 |

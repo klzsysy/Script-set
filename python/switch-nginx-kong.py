@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 实现Nginx与King配置相互转换
+# 实现Nginx与Kong配置相互转换
 # Author: Sonny Yang
 # Email: klzsysy@gmail.com
 
