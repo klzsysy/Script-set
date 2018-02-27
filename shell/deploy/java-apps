@@ -1,0 +1,52 @@
+cmbs    cmbs-advert-admin    8001    7501    10.102.43.211   /cmbs/advert/admin
+cmbs    cmbs-advert-consumer    8002    7502    10.102.43.211   /cmbs/advert/consumer
+cmbs    cmbs-advert-provider    8003    7503    10.102.43.211
+cmbs    cmbs-message-admin    8004    7504    10.102.43.211   /cmbs/message/admin
+cmbs    cmbs-message-consumer    8005    7505    10.102.43.211   /cmbs/message/consumer
+cmbs    cmbs-message-provider    8006    7506    10.102.43.211
+heshenghuo    heshenghuo-hshcmcc-async-provider    8107    7604    10.108.78.139
+heshenghuo    heshenghuo-hshcmcc-provider    8108    7605    10.108.78.139
+heshenghuo    heshenghuo-hshgame-consumer    8109    7606    10.102.43.213   /heshenghuo/game
+heshenghuo    heshenghuo-hshgame-provider    8110    7607    10.102.43.246
+heshenghuo    heshenghuo-hsh-life-consumer    8111    7608    10.102.43.246   /heshenghuo/life
+heshenghuo    heshenghuo-hsh-life-provider    8112    7609    10.102.43.246
+heshenghuo    heshenghuo-hsh-log-provider    8113    7610    10.102.43.246
+heshenghuo    heshenghuo-hshmarketing-consumer    8114    7611    10.108.78.139   /heshenghuo/hshapi
+heshenghuo    heshenghuo-hshmarketing-provider    8115    7612    10.108.78.138
+heshenghuo    heshenghuo-hshreport-admin    8116    7613    10.102.43.246   /heshenghuo/hshreport/admin
+heshenghuo    heshenghuo-hshresources-admin    8117    7614    10.102.43.246   /heshenghuo/hshresources/admin
+heshenghuo    heshenghuo-hshresources-consumer    8118    7615    10.102.43.246   /heshenghuo/hshresources
+heshenghuo    heshenghuo-hshresources-flow    8120    7616    10.102.43.242   /heshenghuo/hshresources/flow
+heshenghuo    heshenghuo-hshresources-provider    8121    7617    10.102.43.242
+heshenghuo    heshenghuo-hshticket-consumer    8125    7621    10.102.43.242    /heshenghuo/hshresources/ticket
+heshenghuo    heshenghuo-hshticket-provider    8126    7622    10.102.43.242
+heshenghuo    heshenghuo-hshuser-authentication    8127    7623    10.108.78.138   /heshenghuo/hshresources/login
+heshenghuo    heshenghuo-hshuser-batch    8128    7624    10.102.43.243   /heshenghuo/batch
+heshenghuo    heshenghuo-hshuser-consumer    8129    7625    10.102.43.243   /heshenghuo/user
+heshenghuo    heshenghuo-hshuser-import    8130    7626    10.102.43.243   /heshenghuo/import
+heshenghuo    heshenghuo-hshuser-provider    8131    7627    10.102.43.243
+heshenghuo    heshenghuo-hshticketmsg-provider    8133    7629    10.102.43.243
+heshenghuo    heshenghuo-hshgold-consumer    8135         7642    10.102.43.243  /heshenghuo/gold
+heshenghuo    heshenghuo-hshgold-provider    8140         7630    10.102.43.211
+moses    moses-api-admin    8200    7700    10.102.43.243   /moses/api/admin
+moses    moses-api-info    8201    7701    10.102.43.243   /moses/apiInfo
+moses    moses-app-admin-consumer    8202    7702    10.102.43.243   /moses/app/admin
+moses    moses-app-admin-provider    8203    7703    10.102.43.243
+moses    moses-app-consumer    8204    7704    10.102.43.245   /moses/app
+moses    moses-jpush-admin    8205    7705    10.102.43.245   /moses/jpush/admin
+moses    moses-jpush-command    8206    7706    10.102.43.245   /moses/jpush/command
+moses    moses-jpush-provider    8207    7707    10.102.43.245
+moses    moses-jpush-query    8208    7708    10.102.43.245
+moses    moses-message-admin    8209    7709    10.102.43.245   /moses/message/admin
+moses    moses-message-consumer    8210    7710    10.102.43.245   /moses/message/app
+moses    moses-message-provider    8211    7711    10.102.43.245
+moses    moses-operation-log-admin    8212    7712    10.102.43.245   /moses/operation/log/admin
+moses    moses-security-admin-consumer    8213    7713    10.102.43.210   /moses/security/admin
+moses    moses-security-admin-provider    8214    7714    10.102.43.210
+moses    moses-shop-admin-consumer    8215    7715    10.102.43.210   /moses/shop/admin
+moses    moses-shop-admin-provider    8216    7716    10.102.43.210
+moses    moses-shop-consumer    8217    7717    10.102.43.210   /moses/shop/app
+moses    moses-uploader    8218    7718    10.102.43.210   /moses/upload
+moses    moses-zoneconf-admin-consumer    8219    7719    10.102.43.208   /moses/zoneconf/admin
+moses    moses-zoneconf-consumer    8220    7720    10.102.43.208   /moses/zoneconf
+moses    moses-zoneconf-provider    8221    7721    10.102.43.208
