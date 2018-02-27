@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 一个文件复制工具
+# 一个增强文件复制工具
 import os
 import hashlib
 import logging
@@ -43,7 +43,7 @@ include_file_type = '^.+$'
 include_min_size = 0            # 最小文件大小，单位kB , 1M=1024KB
 include_max_size = -1           # 最大文件大小，负数为不限制
 
-# 要排除的内容，排除优先与包含
+# 要排除的内容，排除优先于包含
 exclude_folder = ''             # 排除目录, 排除目录的子目录也将排除
 exclude_file_type = ''          # 排除文件类型，Perl风格的正则表达式
 exclude_file = ''               # 完整文件名，不区分大小写
@@ -53,7 +53,7 @@ time_limit_on = True           # 开启关闭时间限定
 time_limit = 24 * 60            # 限定文件修改的时间范围，单位分钟
 
 # 复制前清空目标目录下的文件，不包含文件夹
-emptied = True
+emptied = False
 
 # 日志配置
 log_output_file = True          # 保存到文件

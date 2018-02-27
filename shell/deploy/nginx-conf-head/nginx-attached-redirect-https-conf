@@ -1,0 +1,49 @@
+    # 不可与 nginx-attached-http-https-conf 文件存在相同的 location url 配置
+    # 在https生效，http重定向到https
+    
+    location /heshenghuo/admin {
+        proxy_pass http://admin.heshenghuo-prod.svc:8080/;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /openshift/kong/ {
+        proxy_pass http://kong-dashboard.gateway-stage.svc:8080/;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /group1 {
+        proxy_pass http://10.102.43.240:8200/group1/;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /heshenghuo/game/web/app {
+        proxy_pass http://game-web-app.heshenghuo-prod.svc:8080/;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /heshenghuo/web/app {
+        proxy_pass http://web-app.heshenghuo-prod.svc:8080/;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /hshapi {
+	proxy_pass http://heactivity-login.heshenghuo-prod.svc:8080/;
+	proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    location /heactivity-order {
+	proxy_pass http://heactivity-order.heshenghuo-prod.svc:8080/;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    location /activity {
+	proxy_pass http://web-app.activity-prod.svc:8080/;
+	proxy_set_header X-Real-IP $remote_addr;
+	proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    }
