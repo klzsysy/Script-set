@@ -1,6 +1,0 @@
-#  在匹配的应用名location下增加nginx参数，同一个应用可多个参数 每行一个
-#  行首接应用名，后面是参数 用空格或者tab分割
-#
-#  --应用名 --       -位于location下的可用nginx参数 不需要冒号结尾
-
-moses-uploader      client_max_body_size  64m
