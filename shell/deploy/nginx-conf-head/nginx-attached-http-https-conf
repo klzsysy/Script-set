@@ -1,0 +1,2 @@
+    # 不可与 nginx-attached-redirect-https-conf 文件存在相同的 location url 配置
+    # 同时在http与https生效
