@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# sync docker images registry
+# sync openshift app to k8s
 # by:Sonny Yang
 
 import os
@@ -31,7 +31,16 @@ k8s_login_env = 'kubectl --kubeconfig /root/work/config'
 # deployment template default value
 default_replicas = 1
 # add pod env var
-inject_variables = {"HTTP_PROXY": "http://192.195.20.5:8080"}
+# inject_variables = {"HTTP_PROXY": "http://192.195.20.5:8080"}
+inject_variables = {}
+
+# variables replace
+replace_app_options_variables = {'-DMASTER_URL': 'https://10.254.0.1:443'}
+replace_spring_profiles_active_variables = {'test': 'prod'}
+
+# config maps volume
+mount_config = {'external-config': '/opt/openshift/config/'}
+
 # -------------------------------
 
 # 日志配置
@@ -377,6 +386,58 @@ class ImagesOperating(Check):
         self.push()
 
 
+def decoration_env_replace(func):
+    def replace(*args, **kwargs):
+        # 修改pod环境变量
+        value = kwargs['env']
+        for _key, _value in replace_app_options_variables.items():
+            try:
+                _APP_OPTIONS = re.sub('{}=\S+'.format(_key), '{}={}'.format(_key, _value), value['APP_OPTIONS'])
+            except KeyError:
+                pass
+            else:
+                value['APP_OPTIONS'] = _APP_OPTIONS
+
+        for _key, _value in replace_spring_profiles_active_variables.items():
+            try:
+                _SPRING_PROFILES_ACTIVE = re.sub(_key, _value, value['SPRING_PROFILES_ACTIVE'])
+            except KeyError:
+                pass
+            else:
+                value['SPRING_PROFILES_ACTIVE'] = _SPRING_PROFILES_ACTIVE
+        kwargs['env'] = value
+
+        return func(*args, **kwargs)
+    return replace
+
+
+def decoration_add_config_maps(func):
+    def config_maps(*args, **kwargs):
+
+        if len(mount_config) == 0:
+            # None config maps
+            volumes = ''
+            volumemounts = ''
+        else:
+            volumemounts = '        volumeMounts:\n'
+            volumes = '      volumes:\n'
+            for _key, _value in mount_config.items():
+                volumemounts += '        - mountPath: {}\n'.format(_value)
+                volumemounts += '          name: {}\n'.format(_key)
+                volumemounts += '          readOnly: true\n'
+
+                volumes += '      - configMap:\n'
+                volumes += '          defaultMode: 420\n'
+                volumes += '          name: {}\n'.format(_key)
+                volumes += '        name: {}\n'.format(_key)
+
+        kwargs['volumemounts'] = volumemounts
+        kwargs['volumes'] = volumes
+
+        return func(*args, **kwargs)
+    return config_maps
+
+
 class Deploy(Check):
     def __init__(self, io, **kwargs):
         super().__init__(ns=kwargs['ns'])
@@ -388,7 +449,9 @@ class Deploy(Check):
                            stderr=subprocess.PIPE, stdout=subprocess.PIPE):
             os.system('{env}  create ns {ns}'.format(env=self.k8s_env, ns=self.project))
 
-    def __deployment_yml(self, kwargs: dict, replicas=default_replicas):
+    @decoration_env_replace
+    @decoration_add_config_maps
+    def __deployment_yml(self, **kwargs):
 
         env_template = '''\
         - name: {name}
@@ -420,10 +483,12 @@ class Deploy(Check):
                 image: {image}:{tag}
                 ports:
         {container_port_group}
+        {volumemounts}
                 env:
         {env_group}
                 imagePullPolicy: Always
               restartPolicy: Always
+        {volumes}
         
         ---
         kind: Service
@@ -462,11 +527,14 @@ class Deploy(Check):
         kwargs['container_port_group'] = container_port_group
         kwargs['service_port_group'] = service_port_group
 
-        return dp.format(replicas=replicas, **kwargs)
+        return dp.format(**kwargs)
 
     def __create_deployment(self, obj):
         self.kc_info()
-        deploy_yml = self.__deployment_yml(obj)
+        obj['replicas'] = default_replicas
+        deploy_yml = self.__deployment_yml(**obj)
+        # logs.debug(deploy_yml)
+
         subprocess.call("echo '{yml}' |  {env}  create -f - -n {ns}".format
                         (yml=deploy_yml, ns=self.project, env=self.k8s_env), shell=True)
 
@@ -601,7 +669,7 @@ class Deploy(Check):
         deploy images
         :return: 
         """
-
+        logs.debug('start deployment process...')
         # 检查kubectl能否工作
         if self.kubectl() is False:
             exit(1)
@@ -623,15 +691,18 @@ class Deploy(Check):
                 self.__update_deployment_obj(
                     name=name, image=self.__special_treatment(image, prod_registry_port), tag=tag)
 
-        if self.kwargs['active'] != 'update':
-            # 检查deployment， 对不存在的应用执行 create deploy操作
-            flag = True
-            for kwargs_obj in self.__get_deployment_args():
-                self.__create_deployment(kwargs_obj)
-                flag = False
+        for kwargs_obj in self.__get_deployment_args():
+            self.__create_deployment(kwargs_obj)
 
-            if flag:
-                logs.info('ok, No operation required!')
+        # if self.kwargs['active'] != 'update':
+        #     # 检查deployment， 对不存在的应用执行 create deploy操作
+        #     flag = True
+        #     for kwargs_obj in self.__get_deployment_args():
+        #         self.__create_deployment(kwargs_obj)
+        #         flag = False
+        #
+        #     if flag:
+        #         logs.info('ok, No operation required!')
 
 
 def show_config(project=default_project):
@@ -657,6 +728,7 @@ def args_parser():
         pull: 从开发库拉取image到本机
         push: 将本机镜像推送到k8s，并以本机image为参考k8s更新deployment，更新或创建
         sync: 合并pull与push，即从开发库拉取，推送到k8s并更新或创建deployment
+        deploy: 创建deployment对象
         update xxx: 更新特定应用
 
     '''), formatter_class=argparse.RawDescriptionHelpFormatter, epilog='and more')
@@ -671,7 +743,7 @@ def args_parser():
                        help='拉取project下的所有镜像，包括未运行的，但不会进行部署。默认只拉取运行的中镜像')
     parse.add_argument('--show', action='store_true', help='显示配置信息')
 
-    # debug_args = '--project mcs-test'.split()
+    # debug_args = '--project moses-test update jpush-query'.split()
     debug_args = None
     _args = parse.parse_args(debug_args)
     if _args.active == 'update' and _args.update is None:
