@@ -19,11 +19,15 @@ except ModuleNotFoundError:
     else:
         print('requests install failure!, please manually install')
 
+
+# ---
+
 DEFAULT = {
     'KONG_ADMIN': 'http://kong-admin-gateway-stage.apps.hsh.vpclub.cn/apis/',
     'nginx_cm_name': 'nginx-api',
-    'nginx_project': 'gateway-nginx-prod',
+    'project': 'gateway-nginx-prod',
     'openshift_url': 'https://devops.hsh.vpclub.cn:8443',
+    'k8s_kc': 'kubectl --kubeconfig /root/work/config'
 }
 
 
@@ -128,7 +132,7 @@ server {
 }}
     '''
 
-    return _cm_json.format(nginx_api, args.nginxcm, args.nginxproject)
+    return _cm_json.format(nginx_api, args.nginxcm, args.project)
 
 
 def import_cm(_json, args):
@@ -139,7 +143,7 @@ def import_cm(_json, args):
             print('login failed!')
             exit(-1)
 
-    cm_re = subprocess.call('oc get cm %s -n %s' % (args.nginxcm, args.nginxproject),  shell=True)
+    cm_re = subprocess.call('oc get cm %s -n %s' % (args.nginxcm, args.project),  shell=True)
     if cm_re != 0:
         print('config maps不存在，需要手动创建')
         exit(-1)
@@ -149,16 +153,38 @@ def import_cm(_json, args):
         os.system('oc rollout latest dc/nginx -n gateway-nginx-prod')
 
 
+def get_svc_upstream(args):
+    get_svc_command = "%s get svc -n %s | awk 'NR>1 {print $1,$2}'" % (args.kc, args.project)
+    svc_cluster = subprocess.check_output(get_svc_command, shell=True).decode().split('\n')
+    ok = []
+    for x in [x.split() for x in svc_cluster]:
+        x.append(args.svc_port)
+        ok.append(x)
+    return ok
+
+
 def kong_to_kong(args):
     raw_text = requests.get(args.skong, params='size=1000')
     json_data = raw_text.json()['data']
+
+    svc_list = get_svc_upstream(args)
+
+    def math_avc(api, svc):
+        __api = api.strip('http://')
+        __api = re.sub('{ns}-\S+'.format(ns=args.project.split('-')[0]), '', __api).strip('-')
+        for i in svc:
+            if __api in i[0]:
+                return 'http://' + ':'.join([i[1], i[2]])
+        raise ValueError(api)
 
     for _api in json_data:
         _api['uris'] = _api['uris'][0]
 
         # 应用 --switch 参数
+
         _api['upstream_url'] = _api['upstream_url'].replace('{}'.format(args.switch[0]), '{}'.format(args.switch[1]))
         _api['name'] = _api['name'].replace('{}'.format(args.switch[0]), '{}'.format(args.switch[1]))
+        _api['hosts'] = args.hosts
 
         _api.pop('id')
         _api.pop('created_at')
@@ -166,12 +192,16 @@ def kong_to_kong(args):
         # 处理正则
         if re.match(args.filter, _api['uris']):
             if args.reverse is False:
+                if args.svc:
+                    _api['upstream_url'] = math_avc(_api['upstream_url'], svc_list)
                 create_kong_api(args, **_api)
             else:
                 print(_api['uris'], 'is match filter, but reverse=true, discard!')
 
         else:
             if args.reverse is True:
+                if args.svc:
+                    _api['upstream_url'] = math_avc(_api['upstream_url'], svc_list)
                 create_kong_api(args, **_api)
             else:
                 print(_api['uris'], 'is not match filter, discard!')
@@ -186,23 +216,25 @@ def args_parser():
     parse.add_argument('-dest', choices=['nginx', 'kong'], help="选择转换到目标", required=True)
     parse.add_argument('-skong', type=str, default=DEFAULT['KONG_ADMIN'], help='源KongAPI接口地址')
     parse.add_argument('-dkong', type=str, default=DEFAULT['KONG_ADMIN'], help='目标KongAPI接口地址')
+    parse.add_argument('--svc', action='store_true', help='dest为kong时，使用svc作为upstream地址')
+    parse.add_argument('--svc-port', type=str, default='8080', help='使用svc作为upstream地址时默认后端端口')
+    parse.add_argument('--kc', type=str, default=DEFAULT['k8s_kc'], help='使用svc作为upstream地址时候使用的kubectl命令行')
     parse.add_argument('-nginxcm', type=str, default=DEFAULT['nginx_cm_name'], help='nginx configmaps name，转换到nginx时必需提供')
-    parse.add_argument('-nginxproject', type=str, default=DEFAULT['nginx_project'], help='nginx project name，转换到nginx时必需提供')
+    parse.add_argument('-project', type=str, default=DEFAULT['project'], help='project name，转换到nginx时必需提供')
+    parse.add_argument('--hosts', type=str, default='', help='目标API hosts参数')
     parse.add_argument('-ocurl',  default=DEFAULT['openshift_url'], help='openshift 管理地址，转换到nginx时必需提供')
-
     parse.add_argument('--filter', type=str, default='.*', help="对URL部分进行正则过滤")
     parse.add_argument('--filter-reverse', dest='reverse', action='store_true', help='反转正则匹配')
     parse.add_argument('--switch', nargs=2, default=['-stage', '-stage'], help='关键字替换，替换name及uris')
-    parse.add_argument('--version', action='version', version='%(prog)s 1.0', help='输出版本号')
+    parse.add_argument('--version', action='version', version='%(prog)s 1.1', help='输出版本号')
 
-    # debug_args = '-src kong -dest kong --filter /moses/.*|/cmbs/.* ' \
-    #              '--switch vpclub.io ek.vpclub.cn ' \
-    #              '-dkong http://kong-admin-kong-gateway-dev.apps.ek.vpclub.cn/apis/  ' \
-    #              '-skong http://kong-admin-kong-gateway-dev.apps.vpclub.io/apis/'.split()
+    # debug_args = "-src kong -dest kong --hosts h5.sd.chinamobile.com " \
+    #              "-skong http://testgw.vpclub.cn/apis/ " \
+    #              "-dkong http://h5.sd.chinamobile.com/apis/ " \
+    #              "-project cmbs-test --filter /cmbs/.*".split()
+    debug_args = None
 
-    # debug_args = None
-
-    return parse.parse_args()
+    return parse.parse_args(debug_args)
 
 
 def main():
