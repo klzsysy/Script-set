@@ -14,8 +14,7 @@ import logging.handlers
 
 # -------------------------------
 # run in openshift cluster
-# development_registry = '119.23.227.54:5000'
-# openshift = 'https://devops.vpclub.cn:8443'
+
 development_registry = 'registry.xxx.cn:5000'
 openshift = 'https://registry.xxx.cn:8443'
 #

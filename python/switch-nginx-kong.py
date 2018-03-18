@@ -228,9 +228,9 @@ def args_parser():
     parse.add_argument('--switch', nargs=2, default=['-stage', '-stage'], help='关键字替换，替换name及uris')
     parse.add_argument('--version', action='version', version='%(prog)s 1.1', help='输出版本号')
 
-    # debug_args = "-src kong -dest kong --hosts h5.sd.chinamobile.com " \
-    #              "-skong http://testgw.vpclub.cn/apis/ " \
-    #              "-dkong http://h5.sd.chinamobile.com/apis/ " \
+    # debug_args = "-src kong -dest kong --hosts h5.xxx.xxx.com " \
+    #              "-skong http://testgw.xxx.cn/apis/ " \
+    #              "-dkong http://h5.xx.xxxxx.com/apis/ " \
     #              "-project cmbs-test --filter /cmbs/.*".split()
     debug_args = None
 
