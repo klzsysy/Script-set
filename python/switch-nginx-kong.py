@@ -167,7 +167,8 @@ def kong_to_kong(args):
     raw_text = requests.get(args.skong, params='size=1000')
     json_data = raw_text.json()['data']
 
-    svc_list = get_svc_upstream(args)
+    if args.svc:
+        svc_list = get_svc_upstream(args)
 
     def math_avc(api, svc):
         __api = api.strip('http://')
