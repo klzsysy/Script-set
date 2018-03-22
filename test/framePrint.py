@@ -11,17 +11,13 @@ default_file = 'bad_apple.txt'
 
 def print_line(times, file):
     with open(file) as f:
-        movie = []
         frame = ''
         for index, line in enumerate(f, 1):
             frame += line
             if index % 80 == 0:
-                movie.append(frame)
+                print(frame, flush=True)
                 frame = ''
-
-    for frame in movie:
-        print(frame)
-        time.sleep(times)
+                time.sleep(times)
 
 
 def main():
