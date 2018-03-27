@@ -35,7 +35,7 @@ inject_variables = {}
 
 # variables replace
 replace_app_options_variables = {'-DMASTER_URL': 'https://10.254.0.1:443'}
-replace_spring_profiles_active_variables = {'test': 'prod'}
+replace_spring_profiles_active_variables = {'test': 'test'}
 
 # config maps volume
 mount_config = {'external-config': '/opt/openshift/config/'}
@@ -734,7 +734,7 @@ def args_parser():
 
     parse.add_argument('active', nargs='?', choices=['sync', 'push', 'pull', 'deploy', 'update'], default='sync',
                        help='动作类型，默认为sync')
-    parse.add_argument('update', nargs='?', metavar='update app-name', default='', help='更新应用')
+    parse.add_argument('update', nargs='?', metavar='update app-name', default=None, help='更新应用')
     parse.add_argument('--project', type=str, default=default_project, help='要处理的namespace')
     parse.add_argument('--debug', type=str, choices=['debug', 'info', 'warn', 'error', 'critical'],
                        default=logging_level, help='日志级别')
@@ -742,12 +742,12 @@ def args_parser():
                        help='拉取project下的所有镜像，包括未运行的，但不会进行部署。默认只拉取运行的中镜像')
     parse.add_argument('--show', action='store_true', help='显示配置信息')
 
-    # debug_args = '--project moses-test update jpush-query'.split()
+    # debug_args = 'deploy --project moses-test'.split()
     debug_args = None
     _args = parse.parse_args(debug_args)
     if _args.active == 'update' and _args.update is None:
-        logs.error('update 需要跟随应用名参数')
-        exit(1)
+        print('update 选项需要跟随应用名作为参数')
+        exit(-1)
     else:
         return _args
 
