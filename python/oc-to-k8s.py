@@ -15,8 +15,8 @@ import logging.handlers
 # -------------------------------
 # run in openshift cluster
 
-development_registry = 'registry.xxx.cn:5000'
-openshift = 'https://registry.xxx.cn:8443'
+development_registry = 'registry.xxxx.cn:5000'
+openshift = 'https://registry.xxxx.cn:8443'
 #
 prod_registry = 'registry.paas'
 prod_registry_user = 'admin'
@@ -35,7 +35,7 @@ inject_variables = {}
 
 # variables replace
 replace_app_options_variables = {'-DMASTER_URL': 'https://10.254.0.1:443'}
-replace_spring_profiles_active_variables = {'test': 'test'}
+replace_spring_profiles_active_variables = {'test': 'prod'}
 
 # config maps volume
 mount_config = {'external-config': '/opt/openshift/config/'}
@@ -128,14 +128,14 @@ class Messages(object):
 
 
 class Check(Messages):
-    def __init__(self, dev=development_registry, prod=prod_registry, ns='', oc=openshift,
-                 k8s_env=k8s_login_env):
+    def __init__(self, **kwargs):
         super().__init__()
-        self.k8s_env = k8s_env
-        self.dev_registry = dev
-        self.prod_registry = prod
-        self.project = ns
-        self.openshift = oc
+        self.k8s_env = k8s_login_env
+        self.dev_registry = development_registry
+        self.prod_registry = prod_registry
+        self.project = kwargs['project']
+        self.dproject = kwargs['dproject']
+        self.openshift = openshift
         self.timeout = 3000
 
     @staticmethod
@@ -205,7 +205,7 @@ class Check(Messages):
 class ImagesOperating(Check):
     def __init__(self, **kwargs):
         # ns = --project
-        super().__init__(ns=kwargs.get('project'))
+        super().__init__(**kwargs)
         self.dev_images = []            # 开发库的所有image
         self.dev_update_images = []     # 本次从开发库更新的image
         self.push_list = []             # 执行push的image
@@ -438,15 +438,15 @@ def decoration_add_config_maps(func):
 
 
 class Deploy(Check):
-    def __init__(self, io, **kwargs):
-        super().__init__(ns=kwargs['ns'])
-        self.io = io
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.io = kwargs['io']
         self.kwargs = kwargs
 
     def __namespace_check(self):
-        if subprocess.call('{env}  get ns {ns}'.format(env=self.k8s_env, ns=self.project), shell=True,
+        if subprocess.call('{env}  get ns {ns}'.format(env=self.k8s_env, ns=self.dproject), shell=True,
                            stderr=subprocess.PIPE, stdout=subprocess.PIPE):
-            os.system('{env}  create ns {ns}'.format(env=self.k8s_env, ns=self.project))
+            os.system('{env}  create ns {ns}'.format(env=self.k8s_env, ns=self.dproject))
 
     @decoration_env_replace
     @decoration_add_config_maps
@@ -535,14 +535,14 @@ class Deploy(Check):
         # logs.debug(deploy_yml)
 
         subprocess.call("echo '{yml}' |  {env}  create -f - -n {ns}".format
-                        (yml=deploy_yml, ns=self.project, env=self.k8s_env), shell=True)
+                        (yml=deploy_yml, ns=self.dproject, env=self.k8s_env), shell=True)
 
     def __update_deployment_obj(self, **kwargs):
         def check_tag(tag):
             if tag == 'latest':
                 logs.debug('check %s tag' % kwargs.get('name'))
                 _tag_check = subprocess.call('{env} get deploy  {name} -n {ns} -o yaml | grep "image:" | grep -q -E '
-                                             '":latest$"'.format(env=self.k8s_env, ns=self.project, **kwargs),
+                                             '":latest$"'.format(env=self.k8s_env, ns=self.dproject, **kwargs),
                                              shell=True)
                 logs.debug('_tag_check value:' + str(_tag_check))
                 if _tag_check:
@@ -563,7 +563,7 @@ class Deploy(Check):
             img_and_tag = kwargs['image']
 
         _command = '{env}  set image deployment/{name} {name}={img_url} -n {ns}'.format(
-            env=self.k8s_env, ns=self.project, img_url=img_and_tag, name=kwargs['name'])
+            env=self.k8s_env, ns=self.dproject, img_url=img_and_tag, name=kwargs['name'])
 
         logs.debug(_command)
         os.system(_command)
@@ -579,7 +579,7 @@ class Deploy(Check):
     def __get_deployment_args(self):
 
         prod_deployment = subprocess.check_output("%s  get deployment  -n %s | awk 'NR>1 {print $1}'" %
-                                                  (self.k8s_env, self.project), shell=True, stderr=subprocess.PIPE).\
+                                                  (self.k8s_env, self.dproject), shell=True, stderr=subprocess.PIPE).\
             decode().splitlines()
         try:
             command = "docker images | grep '%s' | grep -v '<none>'" % (self.prod_registry + prod_registry_port +
@@ -656,7 +656,7 @@ class Deploy(Check):
 
     def __check_deployment_exist(self, name):
         if not subprocess.call('{env}  get deployment {name} -n {ns}'.format(
-                env=self.k8s_env, name=name, ns=self.project), shell=True, stdout=subprocess.PIPE,
+                env=self.k8s_env, name=name, ns=self.dproject), shell=True, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE):
             # 存在 deployment
             return True
@@ -734,8 +734,9 @@ def args_parser():
 
     parse.add_argument('active', nargs='?', choices=['sync', 'push', 'pull', 'deploy', 'update'], default='sync',
                        help='动作类型，默认为sync')
-    parse.add_argument('update', nargs='?', metavar='update app-name', default=None, help='更新应用')
-    parse.add_argument('--project', type=str, default=default_project, help='要处理的namespace')
+    parse.add_argument('update', nargs='?', metavar='update app-name', default='', help='更新应用')
+    parse.add_argument('--project', type=str, default=default_project, help='要处理的源namespace')
+    parse.add_argument('--dproject', type=str, default=None, help='部署到的目标namespace，默认与源相同')
     parse.add_argument('--debug', type=str, choices=['debug', 'info', 'warn', 'error', 'critical'],
                        default=logging_level, help='日志级别')
     parse.add_argument('--all', action='store_true', default=False,
@@ -745,7 +746,10 @@ def args_parser():
     # debug_args = 'deploy --project moses-test'.split()
     debug_args = None
     _args = parse.parse_args(debug_args)
-    if _args.active == 'update' and _args.update is None:
+    if _args.dproject is None:
+        _args.dproject = _args.project
+
+    if _args.active == 'update' and _args.update is '':
         print('update 选项需要跟随应用名作为参数')
         exit(-1)
     else:
@@ -754,16 +758,16 @@ def args_parser():
 
 def main(parse):
 
-    ns = parse.project
+    parse_kwargs = vars(parse)
 
     if parse.show:
         show_config()
         return
-    check = Check(ns=ns)
+    check = Check(**parse_kwargs)
     check.login_dev()
     check.login_prod(user=prod_registry_user, token=prod_registry_token)
 
-    io = ImagesOperating(**vars(parse))
+    io = ImagesOperating(**parse_kwargs)
 
     if parse.active == 'pull':
         io.pull()
@@ -776,12 +780,12 @@ def main(parse):
         io.sync()
 
     elif parse.active == 'deploy':
-        deploy = Deploy(io, ns=ns, active=parse.active, pod_env=inject_variables)
+        deploy = Deploy(io=io, pod_env=inject_variables, **parse_kwargs)
         deploy.deployment(status=False)
         return
 
     #  最后对deploy对象进行操作
-    deploy = Deploy(io, ns=ns, active=parse.active, pod_env=inject_variables)
+    deploy = Deploy(io=io, pod_env=inject_variables, **parse_kwargs)
     deploy.deployment()
 
 
