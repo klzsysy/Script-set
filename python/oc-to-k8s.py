@@ -35,7 +35,7 @@ inject_variables = {}
 
 # variables replace
 replace_app_options_variables = {'-DMASTER_URL': 'https://10.254.0.1:443'}
-replace_spring_profiles_active_variables = {'test': 'prod'}
+replace_spring_profiles_active_variables = {'test': 'prod', 'dev': 'prod'}
 
 # config maps volume
 mount_config = {'external-config': '/opt/openshift/config/'}
@@ -214,6 +214,7 @@ class ImagesOperating(Check):
         self.prod_images_name = ''
         self.push_flag = True
         self.kwargs = kwargs
+
 
     def __clear_local_image(self, image_name):
         """
@@ -534,8 +535,8 @@ class Deploy(Check):
         deploy_yml = self.__deployment_yml(**obj)
         # logs.debug(deploy_yml)
 
-        subprocess.call("echo '{yml}' |  {env}  create -f - -n {ns}".format
-                        (yml=deploy_yml, ns=self.dproject, env=self.k8s_env), shell=True)
+        return subprocess.call("echo '{yml}' |  {env}  create -f - -n {ns}".format
+                               (yml=deploy_yml, ns=self.dproject, env=self.k8s_env), shell=True)
 
     def __update_deployment_obj(self, **kwargs):
         def check_tag(tag):
@@ -582,8 +583,14 @@ class Deploy(Check):
                                                   (self.k8s_env, self.dproject), shell=True, stderr=subprocess.PIPE).\
             decode().splitlines()
         try:
-            command = "docker images | grep '%s' | grep -v '<none>'" % (self.prod_registry + prod_registry_port +
-                                                                        prod_registry_prefix + '/' + self.project)
+            logs.debug('update = %s' % self.kwargs['update'])
+            if self.kwargs['update'] != '':
+                command = "docker images | grep '%s' | grep -v '<none>' | grep %s " % (
+                    self.prod_registry + prod_registry_port + prod_registry_prefix + '/' + self.project,
+                    self.kwargs['update'])
+            else:
+                command = "docker images | grep '%s' | grep -v '<none>'" % (self.prod_registry + prod_registry_port +
+                                                                            prod_registry_prefix + '/' + self.project)
             logs.debug('deploy docker grep args: ' + command)
             docker_image = subprocess.check_output(command, shell=True).decode().splitlines()
         except subprocess.CalledProcessError:
@@ -591,7 +598,8 @@ class Deploy(Check):
 
         def match(string=''):
             for dp in prod_deployment:
-                if dp in string:
+                if dp == string:
+                    logs.debug('%s in %s' % (dp, string))
                     logs.debug('已存在 跳过')
                     return False
             return True
@@ -679,29 +687,14 @@ class Deploy(Check):
             '''尝试push一次'''
             self.io.push()
 
-        logs.debug(self.io.pushd_list)
-        for line in self.io.pushd_list:
-            '''处理本次push成功的image'''
-            image, tag = line
-            name = image.split('/')[-1]
-            logs.debug('check prod deploy object %s' % name)
-            if self.__check_deployment_exist(name) is True:
-                logs.debug("deployment存在，%s 需要进行 update 操作" % name)
+        for kwargs_obj in self.__get_deployment_args():
+            # 构建deploy与svc对象
+            if self.__create_deployment(kwargs_obj) == 1 and self.kwargs['active'] == 'update':
+                # 如果处于update状态且已存在
+                image, tag = self.kwargs['push_list'][0]
+                name = image.split('/')[-1]
                 self.__update_deployment_obj(
                     name=name, image=self.__special_treatment(image, prod_registry_port), tag=tag)
-
-        for kwargs_obj in self.__get_deployment_args():
-            self.__create_deployment(kwargs_obj)
-
-        # if self.kwargs['active'] != 'update':
-        #     # 检查deployment， 对不存在的应用执行 create deploy操作
-        #     flag = True
-        #     for kwargs_obj in self.__get_deployment_args():
-        #         self.__create_deployment(kwargs_obj)
-        #         flag = False
-        #
-        #     if flag:
-        #         logs.info('ok, No operation required!')
 
 
 def show_config(project=default_project):
@@ -785,7 +778,7 @@ def main(parse):
         return
 
     #  最后对deploy对象进行操作
-    deploy = Deploy(io=io, pod_env=inject_variables, **parse_kwargs)
+    deploy = Deploy(io=io, pod_env=inject_variables, push_list=io.push_list, **parse_kwargs)
     deploy.deployment()
 
 
