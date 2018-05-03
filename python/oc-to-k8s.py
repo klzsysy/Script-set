@@ -215,7 +215,6 @@ class ImagesOperating(Check):
         self.push_flag = True
         self.kwargs = kwargs
 
-
     def __clear_local_image(self, image_name):
         """
         清理无效的images
@@ -344,8 +343,8 @@ class ImagesOperating(Check):
         if not self.push_list and self.kwargs.get('active') != 'update':
             # 直接调用push
             try:
-                command = 'docker images | grep "%s" ' % (self.prod_registry + prod_registry_port +
-                                                          prod_registry_prefix + '/' + self.project)
+                command = 'docker images | grep -E "%s\s" ' % (self.prod_registry + prod_registry_port +
+                                                               prod_registry_prefix + '/' + self.project)
                 logs.debug('push command: ' + command)
                 local_info = subprocess.check_output(command, shell=True).decode().splitlines()
             except subprocess.CalledProcessError:
@@ -585,12 +584,14 @@ class Deploy(Check):
         try:
             logs.debug('update = %s' % self.kwargs['update'])
             if self.kwargs['update'] != '':
-                command = "docker images | grep '%s' | grep -v '<none>' | grep %s " % (
+                command = "docker images | grep '%s' | grep -v '<none>' | grep -E '/%s\s' " % (
                     self.prod_registry + prod_registry_port + prod_registry_prefix + '/' + self.project,
                     self.kwargs['update'])
             else:
-                command = "docker images | grep '%s' | grep -v '<none>'" % (self.prod_registry + prod_registry_port +
-                                                                            prod_registry_prefix + '/' + self.project)
+                command = "docker images | grep -E '/%s\s' | grep -v '<none>'" % (self.prod_registry +
+                                                                                  prod_registry_port +
+                                                                                  prod_registry_prefix
+                                                                                  + '/' + self.project)
             logs.debug('deploy docker grep args: ' + command)
             docker_image = subprocess.check_output(command, shell=True).decode().splitlines()
         except subprocess.CalledProcessError:
@@ -613,7 +614,7 @@ class Deploy(Check):
                 logs.debug(str(err))
                 logs.debug('%s 不存在 删除' % name)
                 try:
-                    subprocess.check_output("docker images | grep %s/%s | awk '{print $1}' | xargs docker rmi -f" %
+                    subprocess.check_output("docker images | grep -E '%s/%s\s' | awk '{print $1}' | xargs docker rmi -f" %
                                             (self.project, name), shell=True)
                 except subprocess.CalledProcessError as err:
                     logs.debug(str(err))
