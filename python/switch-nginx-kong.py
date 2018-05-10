@@ -56,8 +56,8 @@ def nginx_to_kong(text, args):
         else:
             pass
         if tag == 2:
-            upstream = upstream.replace('{}'.format(args.switch[0]), '{}'.format(args.switch[1]))
-            name = name.replace('{}'.format(args.switch[0]), '{}'.format(args.switch[1]))
+            upstream = upstream.replace('{}'.format(args.rep_up[0]), '{}'.format(args.rep_up[1]))
+            name = name.replace('{}'.format(args.rep_name[0]), '{}'.format(args.rep_name[1]))
 
             create_kong_api(args, uris=location, upstream_url=upstream, name=name)
             tag = 0
@@ -101,8 +101,8 @@ server {
         location = api['uris'][0]
         upstream_url = api['upstream_url']
 
-        # --switch
-        upstream_url = upstream_url.replace('{}'.format(args.switch[0]), '{}'.format(args.switch[1]))
+        # --
+        upstream_url = upstream_url.replace('{}'.format(args.rep_up[0]), '{}'.format(args.rep_up[1]))
 
         _nginx_api = '''
     location {} {{
@@ -181,10 +181,10 @@ def kong_to_kong(args):
     for _api in json_data:
         _api['uris'] = _api['uris'][0]
 
-        # 应用 --switch 参数
+        # 应用 --replace 参数
 
-        _api['upstream_url'] = _api['upstream_url'].replace('{}'.format(args.switch[0]), '{}'.format(args.switch[1]))
-        _api['name'] = _api['name'].replace('{}'.format(args.switch[0]), '{}'.format(args.switch[1]))
+        _api['upstream_url'] = _api['upstream_url'].replace('{}'.format(args.rep_up[0]), '{}'.format(args.rep_up[1]))
+        _api['name'] = _api['name'].replace('{}'.format(args.rep_name[0]), '{}'.format(args.rep_name[1]))
         _api['hosts'] = args.hosts
 
         _api.pop('id')
@@ -226,7 +226,8 @@ def args_parser():
     parse.add_argument('-ocurl',  default=DEFAULT['openshift_url'], help='openshift 管理地址，转换到nginx时必需提供')
     parse.add_argument('--filter', type=str, default='.*', help="对URL部分进行正则过滤")
     parse.add_argument('--filter-reverse', dest='reverse', action='store_true', help='反转正则匹配')
-    parse.add_argument('--switch', nargs=2, default=['-stage', '-stage'], help='关键字替换，替换name及uris')
+    parse.add_argument('--replace-name', dest='rep_name', nargs=2, default=['-stage', '-stage'], help='关键字替换，替换name')
+    parse.add_argument('--replace-upstream', dest='rep_up', nargs=2, default=['cn', 'cn'], help='关键字替换，替换upstream')
     parse.add_argument('--version', action='version', version='%(prog)s 1.1', help='输出版本号')
 
     # debug_args = "-src kong -dest kong --hosts h5.xxx.xxx.com " \
