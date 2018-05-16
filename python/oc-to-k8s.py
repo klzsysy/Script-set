@@ -26,6 +26,7 @@ prod_registry_port = ':80'
 
 default_project = 'moses-test'
 k8s_login_env = 'kubectl --kubeconfig /root/work/config'
+
 #
 # deployment template default value
 default_replicas = 1
@@ -201,6 +202,13 @@ class Check(Messages):
         os.system('docker logout %s' % self.dev_registry)
         os.system('docker logout %s' % self.prod_registry)
 
+    @staticmethod
+    def oc_login_status():
+        if subprocess.call('oc project', shell=True):
+            return False
+        else:
+            return True
+
 
 class ImagesOperating(Check):
     def __init__(self, **kwargs):
@@ -254,16 +262,18 @@ class ImagesOperating(Check):
         self.pull_info()
 
         # 开发库镜像列表
-        pull_command = "oc get is %s | awk 'NR>1 {print $0}'" % self.kwargs.get('update', '')
+        pull_command = "oc get is %s -n %s| awk 'NR>1 {print $0}'" % (*self.kwargs.get('update', ''), self.project)
         logs.debug(pull_command)
         image_streams_line = subprocess.check_output(pull_command, shell=True).decode().splitlines()
 
         # -------- 删除deployment不存在但images存在的对象
         if self.kwargs['all'] is False:
-            dc_name = subprocess.check_output("oc get dc %s | awk 'NR>1 {print $1}'" %
-                                              self.kwargs.get('update', ''), shell=True).decode().splitlines()
-            is_name = subprocess.check_output("oc get is %s | awk 'NR>1 {print $1}'" %
-                                              self.kwargs.get('update', ''), shell=True).decode().splitlines()
+            dc_name = subprocess.check_output("oc get dc %s -n %s| awk 'NR>1 {print $1}'" %
+                                              (self.kwargs.get('update', ''), self.project),
+                                              shell=True).decode().splitlines()
+            is_name = subprocess.check_output("oc get is %s -n %s| awk 'NR>1 {print $1}'" %
+                                              (self.kwargs.get('update', ''), self.project),
+                                              shell=True).decode().splitlines()
             image_mixed = set(dc_name) & set(is_name)
 
             def __drop_img(_name):
@@ -306,8 +316,8 @@ class ImagesOperating(Check):
         self.__update_tag()
 
         # clear local images
-        image_and_tag = [x[1].strip('/')+':'+x[2] for x in self.dev_images]
-        self.__clear_local_image(image_and_tag)
+        # image_and_tag = [x[1].strip('/')+':'+x[2] for x in self.dev_images]
+        # self.__clear_local_image(image_and_tag)
 
     def __update_tag(self):
         logs.debug('start update image tag...')
@@ -315,20 +325,21 @@ class ImagesOperating(Check):
         for line in self.dev_update_images:
             name, image, tag = line
             line_number += 1
-            command = 'docker tag {0}{1}:{2} {3}{4}{5}{1}:{2}'.format(self.dev_registry, image, tag,
-                                                                      self.prod_registry,
-                                                                      prod_registry_port,
-                                                                      prod_registry_prefix)
+            origin_image = '{0}{1}'.format(self.dev_registry, image)
+            dest_image = '{0}{1}{2}/{3}/{4}'.format(self.prod_registry, prod_registry_port, prod_registry_prefix,
+                                                    self.dproject, name)
+
+            command = 'docker tag {0}:{2}  {1}:{2}' .format(origin_image, dest_image, tag)
 
             logs.debug('%-3s: %s' % (str(line_number), command))
 
             tag_stats = os.system(command)
             if tag_stats == 0:
-                logs.debug('update tag success:  %s%s:%s' % (self.dev_registry, image, tag))
+                logs.debug('update tag success:  %s' % origin_image)
             else:
-                logs.debug('update tag failure:  %s%s:%s' % (self.dev_registry, image, tag))
+                logs.debug('update tag failure:  %s' % origin_image)
 
-            self.push_list.append((self.prod_registry + prod_registry_port + prod_registry_prefix + image, tag))
+            self.push_list.append((dest_image, tag))
 
         logs.debug('end update image tag')
 
@@ -343,8 +354,9 @@ class ImagesOperating(Check):
         if not self.push_list and self.kwargs.get('active') != 'update':
             # 直接调用push
             try:
-                command = 'docker images | grep -E "%s\s" ' % (self.prod_registry + prod_registry_port +
-                                                               prod_registry_prefix + '/' + self.project)
+                # %s/ 以 namespace 名结尾
+                command = 'docker images | grep -E "%s/" ' % (self.prod_registry + prod_registry_port +
+                                                              prod_registry_prefix + '/' + self.dproject)
                 logs.debug('push command: ' + command)
                 local_info = subprocess.check_output(command, shell=True).decode().splitlines()
             except subprocess.CalledProcessError:
@@ -584,14 +596,18 @@ class Deploy(Check):
         try:
             logs.debug('update = %s' % self.kwargs['update'])
             if self.kwargs['update'] != '':
-                command = "docker images | grep '%s' | grep -v '<none>' | grep -E '/%s\s' " % (
-                    self.prod_registry + prod_registry_port + prod_registry_prefix + '/' + self.project,
+                # update args , name 分隔，单镜像筛选
+                command = "docker images |  grep -v '<none>' | grep -E '%s/%s\s' " % (
+                    self.prod_registry + prod_registry_port + prod_registry_prefix + '/' + self.dproject,
+                    # image name
                     self.kwargs['update'])
             else:
-                command = "docker images | grep -E '/%s\s' | grep -v '<none>'" % (self.prod_registry +
-                                                                                  prod_registry_port +
-                                                                                  prod_registry_prefix
-                                                                                  + '/' + self.project)
+                # 多镜像筛选
+                command = "docker images | grep -v '<none>' | grep -E '%s/'" % (self.prod_registry +
+                                                                                prod_registry_port +
+                                                                                prod_registry_prefix
+                                                                                + '/' + self.dproject)
+
             logs.debug('deploy docker grep args: ' + command)
             docker_image = subprocess.check_output(command, shell=True).decode().splitlines()
         except subprocess.CalledProcessError:
@@ -614,8 +630,8 @@ class Deploy(Check):
                 logs.debug(str(err))
                 logs.debug('%s 不存在 删除' % name)
                 try:
-                    subprocess.check_output("docker images | grep -E '%s/%s\s' | awk '{print $1}' | xargs docker rmi -f" %
-                                            (self.project, name), shell=True)
+                    subprocess.check_output("docker images | grep -E '%s/%s\s' | awk '{print $1}' | xargs docker rmi -f"
+                                            % (self.project, name), shell=True)
                 except subprocess.CalledProcessError as err:
                     logs.debug(str(err))
 
@@ -631,13 +647,13 @@ class Deploy(Check):
             return {x.split('=', maxsplit=1)[0]: x.split('=', maxsplit=1)[1] for x in env_list}
 
         def get_label():
-            label_list = subprocess.check_output("oc get dc %s --show-labels | awk 'NR==2 {print $NF}'" % name,
-                                                 shell=True).decode().strip().split(',')
+            label_list = subprocess.check_output("oc get dc %s -n %s --show-labels | awk 'NR==2 {print $NF}'" %
+                                                 (name, self.project), shell=True).decode().strip().split(',')
             return {x.split('=')[0]: x.split('=')[1] for x in label_list}
 
         def get_port():
-            return subprocess.check_output("oc get dc %s -o yaml | grep containerPort | awk '{print $NF}'" % name,
-                                           shell=True).decode().strip().splitlines()
+            return subprocess.check_output("oc get dc %s  -n %s -o yaml | grep containerPort | awk '{print $NF}'" %
+                                           (name, self.project), shell=True).decode().strip().splitlines()
 
         deploy_args_list = []
         deploy_args = {}
@@ -649,6 +665,7 @@ class Deploy(Check):
                 name = image.split('/')[-1]
                 # check deployment object
                 if not check_exist(name):
+                    logs.warning(name + '将不会部署')
                     continue
                 deploy_args['name'] = name
                 deploy_args['image'] = self.__special_treatment(image, prod_registry_port)
@@ -661,6 +678,7 @@ class Deploy(Check):
 
                 deploy_args_list.append(_temp_dict)
 
+        logs.debug(deploy_args_list)
         return deploy_args_list
 
     def __check_deployment_exist(self, name):
@@ -681,6 +699,10 @@ class Deploy(Check):
         # 检查kubectl能否工作
         if self.kubectl() is False:
             exit(1)
+
+        if self.oc_login_status() is False:
+            logs.error('login token 失效，请重新登录再继续')
+            exit(3)
 
         self.__namespace_check()
 
