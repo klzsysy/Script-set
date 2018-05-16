@@ -11,9 +11,9 @@ import argparse
 
 try:
     import requests
-except ModuleNotFoundError:
+except ImportError:
     print('not find requests module, try install...')
-    requests_re = os.system('pip install requests')
+    requests_re = os.system('pip3 install requests')
     if requests_re == 0:
         import requests
     else:
@@ -59,25 +59,26 @@ def nginx_to_kong(text, args):
             upstream = upstream.replace('{}'.format(args.rep_up[0]), '{}'.format(args.rep_up[1]))
             name = name.replace('{}'.format(args.rep_name[0]), '{}'.format(args.rep_name[1]))
 
-            create_kong_api(args, uris=location, upstream_url=upstream, name=name)
+            create_kong_api(url=args.dkong, uris=location, upstream_url=upstream, name=name)
             tag = 0
 
 
-def create_kong_api(args, **kw):
+def create_kong_api(url, method='POST', **kw):
 
-    kw['strip_uri'] = kw.get('strip_uri', 'true')
+    # kw['strip_uri'] = kw.get('strip_uri', 'true')
 
-    kw['http_if_terminated'] = kw.get('http_if_terminated', 'true')
+    # kw['http_if_terminated'] = kw.get('http_if_terminated', 'true')
 
-    # r = requests.post(args.dkong, data={'name': kw['name'], 'uris': kw['uris'], 'upstream_url': kw['upstream_url'],
-    #                                     'http_if_terminated': kw['http_if_terminated'], 'strip_uri': kw['strip_uri']})
-    r = requests.post(args.dkong, data=kw)
+    # r = requests.post(args.dkong, data=kw)
+    r = requests.request(method=method, url=url, data=kw)
 
     print(r.status_code, r.reason)
     if r.status_code == 409:
         print(kw['name'], ' 已存在')
     elif r.status_code == 201:
         print('name: %s Created!' % kw['name'])
+    elif r.status_code == 200:
+        print('name: %s Updated!' % kw['name'])
     else:
         print('name: %s error!' % kw['name'])
 
@@ -153,6 +154,61 @@ def import_cm(_json, args):
         os.system('oc rollout latest dc/nginx -n gateway-nginx-prod')
 
 
+def filter_process(args, uris):
+    if re.match(args.filter, uris):
+        if args.reverse is False:
+            return True
+        else:
+            print(uris, 'is match filter, but reverse=true, discard!')
+            return False
+    else:
+        if args.reverse is True:
+            return True
+        else:
+            print(uris, 'is not match filter, discard!')
+            return False
+
+
+class ChangeKong(object):
+    def __init__(self, args):
+        self.args = args
+
+        self.raw_text = requests.get(self.args.skong, params='size=1000')
+        self.json_data = self.raw_text.json()['data']
+        self.change_mode = self.args.change
+        self._action()
+
+    def _action(self):
+        if self.change_mode == 'update':
+            self.change_attrib = self._read_update_args()
+            self._update_host()
+
+    def _read_update_args(self):
+        x = {}
+        for _attribute in self.args.update:
+            try:
+                _key, _value = _attribute.split('=')
+
+            except ValueError:
+                print('Error value %s' % _attribute)
+            else:
+                x[_key] = _value
+        return x
+
+    def _update_host(self):
+        update_data = {}
+        for _api in self.json_data:
+            # 过滤
+            if filter_process(self.args, _api['uris'][0]):
+                for _key, _value in self.change_attrib.items():
+                    update_data['name'] = _api['name']
+                    update_data[_key] = _value
+
+                    # update api
+                    create_kong_api(url=self.args.skong+'/%s' % _api['id'], method='PATCH', **update_data)
+                    update_data.clear()
+
+
 def get_svc_upstream(args):
     get_svc_command = "%s get svc -n %s | awk 'NR>1 {print $1,$2}'" % (args.kc, args.project)
     svc_cluster = subprocess.check_output(get_svc_command, shell=True).decode().split('\n')
@@ -190,22 +246,10 @@ def kong_to_kong(args):
         _api.pop('id')
         _api.pop('created_at')
 
-        # 处理正则
-        if re.match(args.filter, _api['uris']):
-            if args.reverse is False:
-                if args.svc:
-                    _api['upstream_url'] = math_avc(_api['upstream_url'], svc_list)
-                create_kong_api(args, **_api)
-            else:
-                print(_api['uris'], 'is match filter, but reverse=true, discard!')
-
-        else:
-            if args.reverse is True:
-                if args.svc:
-                    _api['upstream_url'] = math_avc(_api['upstream_url'], svc_list)
-                create_kong_api(args, **_api)
-            else:
-                print(_api['uris'], 'is not match filter, discard!')
+        if filter_process(args, uris=_api['uris']):
+            if args.svc:
+                _api['upstream_url'] = math_avc(_api['upstream_url'], svc_list)
+            create_kong_api(url=args.dkong, **_api)
 
 
 def args_parser():
@@ -217,6 +261,8 @@ def args_parser():
     parse.add_argument('-dest', choices=['nginx', 'kong'], help="选择转换到目标", required=True)
     parse.add_argument('-skong', type=str, default=DEFAULT['KONG_ADMIN'], help='源KongAPI接口地址')
     parse.add_argument('-dkong', type=str, default=DEFAULT['KONG_ADMIN'], help='目标KongAPI接口地址')
+    parse.add_argument('-change', type=str, choices=['update', 'delete'], help='修改的动作模式')
+    parse.add_argument('--update', type=str, nargs='+', help='更新特定属性，change参数使用时有效, 更新skong目标')
     parse.add_argument('--svc', action='store_true', help='dest为kong时，使用svc作为upstream地址')
     parse.add_argument('--svc-port', type=str, default='8080', help='使用svc作为upstream地址时默认后端端口')
     parse.add_argument('--kc', type=str, default=DEFAULT['k8s_kc'], help='使用svc作为upstream地址时候使用的kubectl命令行')
@@ -231,9 +277,8 @@ def args_parser():
     parse.add_argument('--version', action='version', version='%(prog)s 1.1', help='输出版本号')
 
     # debug_args = "-src kong -dest kong --hosts h5.xxx.xxx.com " \
-    #              "-skong http://testgw.xxx.cn/apis/ " \
-    #              "-dkong http://h5.xx.xxxxx.com/apis/ " \
-    #              "-project cmbs-test --filter /cmbs/.*".split()
+    #              "-skong http://h5.sd.chinamobile.com/admin-api/apis/ " \
+    #              "-project cmbs-test   -change update --update hosts=h5.sd.chinamobile.com".split()
     debug_args = None
 
     return parse.parse_args(debug_args)
@@ -247,7 +292,10 @@ def main():
     elif args.src == 'kong' and args.dest == 'nginx':
         import_cm(kong_to_nginx(args), args)
     elif args.src == args.dest == 'kong':
-        kong_to_kong(args)
+        if args.change is not None:
+            ChangeKong(args)
+        else:
+            kong_to_kong(args)
     else:
         print("不支持的转换方式")
 
