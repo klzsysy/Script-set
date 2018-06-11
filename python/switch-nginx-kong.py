@@ -30,6 +30,29 @@ DEFAULT = {
     'k8s_kc': 'kubectl --kubeconfig /root/work/config'
 }
 
+# ---------
+
+
+def build_svc(upstream, svc_port):
+    """
+    将upstream转换为k8s内部地址
+    :param upstream: http://app-name-namespace-env.apps.xx.com
+    :param svc_port: default is 8080
+    :return: http://app_name.namespace-env:8080
+    """
+    _url = upstream.split('.')
+    try:
+        url_prefix = _url[0]
+        i = re.match('(.*?)-(\w+-\w+)$', url_prefix)
+        _name = i.group(1)
+        _ns = i.group(2)
+    except IndexError:
+        return upstream
+    except AttributeError:
+        return upstream
+    else:
+        return _name + '.' + _ns + ':{}'.format(svc_port)
+
 
 def nginx_to_kong(text, args):
     tag = 0
@@ -59,7 +82,11 @@ def nginx_to_kong(text, args):
             upstream = upstream.replace('{}'.format(args.rep_up[0]), '{}'.format(args.rep_up[1]))
             name = name.replace('{}'.format(args.rep_name[0]), '{}'.format(args.rep_name[1]))
 
-            create_kong_api(url=args.dkong, uris=location, upstream_url=upstream, name=name)
+            if filter_process(args, uris=location):
+                if args.svc:
+                    upstream = build_svc(upstream, svc_port=args.svc_port)
+
+            create_kong_api(url=args.dkong, uris=location, upstream_url=upstream, name=name, hosts=args.hosts)
             tag = 0
 
 
@@ -144,7 +171,7 @@ def import_cm(_json, args):
             print('login failed!')
             exit(-1)
 
-    cm_re = subprocess.call('oc get cm %s -n %s' % (args.nginxcm, args.project),  shell=True)
+    cm_re = subprocess.call('%s get cm %s -n %s' % (args.kc, args.nginxcm, args.project),  shell=True)
     if cm_re != 0:
         print('config maps不存在，需要手动创建')
         exit(-1)
@@ -209,30 +236,12 @@ class ChangeKong(object):
                     update_data.clear()
 
 
-def get_svc_upstream(args):
-    get_svc_command = "%s get svc -n %s | awk 'NR>1 {print $1,$2}'" % (args.kc, args.project)
-    svc_cluster = subprocess.check_output(get_svc_command, shell=True).decode().split('\n')
-    ok = []
-    for x in [x.split() for x in svc_cluster]:
-        x.append(args.svc_port)
-        ok.append(x)
-    return ok
-
-
 def kong_to_kong(args):
     raw_text = requests.get(args.skong, params='size=1000')
     json_data = raw_text.json()['data']
 
-    if args.svc:
-        svc_list = get_svc_upstream(args)
-
-    def math_avc(api, svc):
-        __api = api.strip('http://')
-        __api = re.sub('{ns}-\S+'.format(ns=args.project.split('-')[0]), '', __api).strip('-')
-        for i in svc:
-            if __api in i[0]:
-                return 'http://' + ':'.join([i[1], i[2]])
-        raise ValueError(api)
+    # if args.svc:
+    #     svc_list = get_svc_upstream(args)
 
     for _api in json_data:
         _api['uris'] = _api['uris'][0]
@@ -248,7 +257,7 @@ def kong_to_kong(args):
 
         if filter_process(args, uris=_api['uris']):
             if args.svc:
-                _api['upstream_url'] = math_avc(_api['upstream_url'], svc_list)
+                _api['upstream_url'] = build_svc(_api['upstream_url'], args.svc_port)
             create_kong_api(url=args.dkong, **_api)
 
 
@@ -264,8 +273,8 @@ def args_parser():
     parse.add_argument('-change', type=str, choices=['update', 'delete'], help='修改的动作模式')
     parse.add_argument('--update', type=str, nargs='+', help='更新特定属性，change参数使用时有效, 更新skong目标')
     parse.add_argument('--svc', action='store_true', help='dest为kong时，使用svc作为upstream地址')
-    parse.add_argument('--svc-port', type=str, default='8080', help='使用svc作为upstream地址时默认后端端口')
-    parse.add_argument('--kc', type=str, default=DEFAULT['k8s_kc'], help='使用svc作为upstream地址时候使用的kubectl命令行')
+    parse.add_argument('--svc-port', dest='svc_port', type=str, default='8080', help='使用svc作为upstream地址时默认后端端口')
+    parse.add_argument('--kc', type=str, default=DEFAULT['k8s_kc'], help='使用svc作为upstream地址时候使用的kubectl命令行, 调用目标集群')
     parse.add_argument('-nginxcm', type=str, default=DEFAULT['nginx_cm_name'], help='nginx configmaps name，转换到nginx时必需提供')
     parse.add_argument('-project', type=str, default=DEFAULT['project'], help='project name，转换到nginx时必需提供')
     parse.add_argument('--hosts', type=str, default='', help='目标API hosts参数')
@@ -279,6 +288,7 @@ def args_parser():
     # debug_args = "-src kong -dest kong --hosts h5.xxx.xxx.com " \
     #              "-skong http://h5.sd.chinamobile.com/admin-api/apis/ " \
     #              "-project cmbs-test   -change update --update hosts=h5.sd.chinamobile.com".split()
+    # debug_args = "-src=nginx  -dest=kong --svc --filter=/moses".split()
     debug_args = None
 
     return parse.parse_args(debug_args)
