@@ -86,17 +86,12 @@ def nginx_to_kong(text, args):
                 if args.svc:
                     upstream = build_svc(upstream, svc_port=args.svc_port)
 
-            create_kong_api(url=args.dkong, uris=location, upstream_url=upstream, name=name, hosts=args.hosts)
+                create_kong_api(url=args.dkong, uris=location, upstream_url=upstream, name=name, hosts=args.hosts)
             tag = 0
 
 
 def create_kong_api(url, method='POST', **kw):
 
-    # kw['strip_uri'] = kw.get('strip_uri', 'true')
-
-    # kw['http_if_terminated'] = kw.get('http_if_terminated', 'true')
-
-    # r = requests.post(args.dkong, data=kw)
     r = requests.request(method=method, url=url, data=kw)
 
     print(r.status_code, r.reason)
