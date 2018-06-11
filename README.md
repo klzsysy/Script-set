@@ -16,3 +16,4 @@
 | [deploy](shell/deploy/deploy.sh)                           | Shell    | 一个简单的微服务管理工具。从openshift或k8s获取java微服务应用部署到裸机。完成自动运行、自动更新API路由、自动更新DNS、健康检查、自动故障恢复等功能。用于临时测试或者临时业务迁移。 |
 | [recover-images](shell/oc-image-recover/recover-images.sh) | Shell    | 恢复Openshift Rgistry镜像数据，使用当前正在运行的pod         |
 | [mysql-install](shell/mysql-install.sh)                    | Shell    | MySQL 二进制安装包快速安装，快速主从配置                     |
+| [oc-to-oc](shell/oc-to-oc.sh)                              | Shell    | 将一个openshift内的资源迁移到另一个openshift                 |
