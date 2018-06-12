@@ -55,21 +55,28 @@ def build_svc(upstream, svc_port):
 
 
 def nginx_to_kong(text, args):
+    """
+    解析 nginx配置文件
+    :param text: 包含nginx反代理配置的文本
+    :param args: 输入参数
+    :return: None
+    """
     tag = 0
     location = ''
     upstream = ''
     name = ''
+    _api = {}
 
     for line in text.splitlines():
         if 'location' in line:
-            location = line.split()[1].strip('\{')
+            location = re.findall('(/\S*)', line)[0]
+            _api['uris'] = location
             # 上个location不是反代
             if tag == 1:
                 tag -= 1
             tag += 1
         elif 'proxy_pass' in line:
             upstream = line.split()[1].strip(';')
-
             # upstream IP与域名判断，提取应用名
             if re.match('\S+?\d+\.\d+.\d+.\d+', upstream):
                 name = '-'.join(location.split('/')).strip('-')
@@ -82,12 +89,20 @@ def nginx_to_kong(text, args):
             upstream = upstream.replace('{}'.format(args.rep_up[0]), '{}'.format(args.rep_up[1]))
             name = name.replace('{}'.format(args.rep_name[0]), '{}'.format(args.rep_name[1]))
 
+            _api['name'] = name
+            _api['hosts'] = args.hosts
+            _api['url'] = args.dkong
+            _api['upstream_url'] = upstream
+
             if filter_process(args, uris=location):
                 if args.svc:
-                    upstream = build_svc(upstream, svc_port=args.svc_port)
+                    _api['upstream_url'] = build_svc(upstream, svc_port=args.svc_port)
+                    if args.save_host:
+                        _api['preserve_host'] = True
 
-                create_kong_api(url=args.dkong, uris=location, upstream_url=upstream, name=name, hosts=args.hosts)
+                create_kong_api(**_api)
             tag = 0
+            _api.clear()
 
 
 def create_kong_api(url, method='POST', **kw):
@@ -235,9 +250,6 @@ def kong_to_kong(args):
     raw_text = requests.get(args.skong, params='size=1000')
     json_data = raw_text.json()['data']
 
-    # if args.svc:
-    #     svc_list = get_svc_upstream(args)
-
     for _api in json_data:
         _api['uris'] = _api['uris'][0]
 
@@ -253,6 +265,8 @@ def kong_to_kong(args):
         if filter_process(args, uris=_api['uris']):
             if args.svc:
                 _api['upstream_url'] = build_svc(_api['upstream_url'], args.svc_port)
+                if args.save_host:
+                    _api['preserve_host'] = True
             create_kong_api(url=args.dkong, **_api)
 
 
@@ -268,6 +282,7 @@ def args_parser():
     parse.add_argument('-change', type=str, choices=['update', 'delete'], help='修改的动作模式')
     parse.add_argument('--update', type=str, nargs='+', help='更新特定属性，change参数使用时有效, 更新skong目标')
     parse.add_argument('--svc', action='store_true', help='dest为kong时，使用svc作为upstream地址')
+    parse.add_argument('--save-host', action='store_true', help='转发host头到upstream, 使用--svc参数时有效，默认关闭')
     parse.add_argument('--svc-port', dest='svc_port', type=str, default='8080', help='使用svc作为upstream地址时默认后端端口')
     parse.add_argument('--kc', type=str, default=DEFAULT['k8s_kc'], help='使用svc作为upstream地址时候使用的kubectl命令行, 调用目标集群')
     parse.add_argument('-nginxcm', type=str, default=DEFAULT['nginx_cm_name'], help='nginx configmaps name，转换到nginx时必需提供')
@@ -283,7 +298,8 @@ def args_parser():
     # debug_args = "-src kong -dest kong --hosts h5.xxx.xxx.com " \
     #              "-skong http://h5.sd.chinamobile.com/admin-api/apis/ " \
     #              "-project cmbs-test   -change update --update hosts=h5.sd.chinamobile.com".split()
-    # debug_args = "-src=nginx  -dest=kong --svc --filter=/moses".split()
+    # debug_args = "-src=nginx  -dest=kong --save-host --svc " \
+    #              "-dkong http://kong-admin-kong-gateway-prod.apps.hb.vpclub.cn/apis/".split()
     debug_args = None
 
     return parse.parse_args(debug_args)
@@ -294,6 +310,7 @@ def main():
 
     if args.src == "nginx" and args.dest == 'kong':
         nginx_to_kong(sys.stdin.read(), args)
+        # nginx_to_kong(open('nginx.conf', encoding='utf-8').read(), args)
     elif args.src == 'kong' and args.dest == 'nginx':
         import_cm(kong_to_nginx(args), args)
     elif args.src == args.dest == 'kong':
