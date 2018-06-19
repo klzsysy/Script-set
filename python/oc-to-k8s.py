@@ -35,7 +35,7 @@ default_replicas = 1
 inject_variables = {}
 
 # variables replace
-replace_app_options_variables = {'-DMASTER_URL': 'https://10.254.0.1:443'}
+replace_app_options_variables = {'-DMASTER_URL': 'https://kubernetes.default.svc'}
 replace_spring_profiles_active_variables = {'test': 'prod', 'dev': 'prod'}
 
 # config maps volume
@@ -401,6 +401,7 @@ def decoration_env_replace(func):
     def replace(*args, **kwargs):
         # 修改pod环境变量
         value = kwargs['env']
+        # 预定义变量替换
         for _key, _value in replace_app_options_variables.items():
             try:
                 _APP_OPTIONS = re.sub('{}=\S+'.format(_key), '{}={}'.format(_key, _value), value['APP_OPTIONS'])
@@ -416,9 +417,11 @@ def decoration_env_replace(func):
                 pass
             else:
                 value['SPRING_PROFILES_ACTIVE'] = _SPRING_PROFILES_ACTIVE
+
         kwargs['env'] = value
 
-        return func(*args, **kwargs)
+        # namespace关键字替换
+        return re.sub(kwargs['command_args']['project'], kwargs['command_args']['dproject'], func(*args, **kwargs))
     return replace
 
 
@@ -543,7 +546,7 @@ class Deploy(Check):
     def __create_deployment(self, obj):
         self.kc_info()
         obj['replicas'] = default_replicas
-        deploy_yml = self.__deployment_yml(**obj)
+        deploy_yml = self.__deployment_yml(command_args=self.kwargs, **obj)
         # logs.debug(deploy_yml)
 
         return subprocess.call("echo '{yml}' |  {env}  create -f - -n {ns}".format
