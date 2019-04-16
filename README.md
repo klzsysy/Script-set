@@ -17,3 +17,4 @@
 | [recover-images](shell/oc-image-recover/recover-images.sh) | Shell    | 恢复Openshift Rgistry镜像数据，使用当前正在运行的pod         |
 | [mysql-install](shell/mysql-install.sh)                    | Shell    | MySQL 二进制安装包快速安装，快速主从配置                     |
 | [oc-to-oc](shell/oc-to-oc.sh)                              | Shell    | 将一个openshift内的资源迁移到另一个openshift                 |
+| [tcpings](shell/tcpings.sh)                                 | Shell   | tcping的简单封装，便于快速测试可达率 |
